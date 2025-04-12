@@ -1,0 +1,49 @@
+# docker-compose.yml
+services:
+  db:
+    image: postgres:latest
+    container_name: proyecto2_db_no_volume # Nombre opcional
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-user}         # Usa variable de entorno o default 'user'
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password} # Usa variable de entorno o default 'password'
+      POSTGRES_DB: ${POSTGRES_DB:-mydatabase}       # Usa variable de entorno o default 'mydatabase'
+    # No hay sección 'volumes' aquí para evitar persistencia
+    ports:
+      - "3003:5432" # Mapea puerto solo si necesitas acceso externo a la BD
+    # Script de inicialización se copiarán automáticamente por la imagen base de postgres
+    volumes:
+      - ./01_ddl.sql:/docker-entrypoint-initdb.d/01_ddl.sql
+      - ./02_data.sql:/docker-entrypoint-initdb.d/02_data.sql
+    healthcheck:
+      # Comando para verificar si postgres está listo para aceptar conexiones
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s    # Revisa cada 5 segundos
+      timeout: 5s     # Espera máxima por respuesta
+      retries: 5      # Número de intentos fallidos antes de marcar como 'unhealthy'
+    networks:
+      - app-net
+
+  app:
+    build: ./app
+    container_name: proyecto2_app_no_volume # Nombre opcional
+    environment:
+      # La URL de conexión DEBE usar el nombre del servicio 'db', no 'localhost'
+      DATABASE_URL: postgres://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-mydatabase}
+      RUST_LOG: info # Ajusta el nivel de log: trace, debug, info, warn, error
+    depends_on:
+      db:
+        # Espera a que el servicio 'db' esté saludable (healthcheck OK)
+        condition: service_healthy
+    volumes:
+      # Montamos resultados para poder verlos fuera del contenedor
+      - ./resultados:/app/resultados # Asegúrate que la ruta interna /app sea correcta según tu Dockerfile de Rust
+    networks:
+      - app-net
+    # No definimos 'command' aquí, asumimos que lo ejecuta test.sh o el Dockerfile
+
+# Definimos la red que usarán los servicios
+networks:
+  app-net:
+    driver: bridge
+
+# No hay sección global 'volumes'

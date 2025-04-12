@@ -1,0 +1,7 @@
+# Dockerfile.db
+
+FROM postgres:16-alpine
+
+COPY 01_ddl.sql /docker-entrypoint-initdb.d/
+COPY 02_data.sql /docker-entrypoint-initdb.d/
+
